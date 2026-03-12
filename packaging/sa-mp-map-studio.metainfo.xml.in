@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>@APP_DESKTOP_ID@.desktop</id>
+  <name>@APP_DISPLAY_NAME@</name>
+  <summary>Map editor and coordinate tool for GTA San Andreas and SA:MP</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <description>
+    <p>
+      SA:MP Map Studio is a Linux desktop tool for browsing the San Andreas map,
+      looking up X/Y/Z coordinates, placing spawns and vehicles, defining gang
+      zones and exporting the result.
+    </p>
+  </description>
+  <launchable type="desktop-id">@APP_DESKTOP_ID@.desktop</launchable>
+  <categories>
+    <category>Game</category>
+    <category>Development</category>
+    <category>Utility</category>
+  </categories>
+</component>

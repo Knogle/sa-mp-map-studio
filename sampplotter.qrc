@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="/data">
+    <file>data/San_Andreas_aerial_view.jpg</file>
+    <file>data/samp.ico</file>
+    <file>data/samp_icon_32.png</file>
+    <file>data/samp_zones.json</file>
+  </qresource>
+</RCC>

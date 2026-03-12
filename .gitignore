@@ -1,0 +1,27 @@
+# Build directories
+/build/
+/build-*/
+/cmake-build-*/
+
+# CMake / Qt generated files
+/CMakeUserPresets.json
+/.qt/
+/.qtc_clangd/
+/.cache/
+
+# Packaged artifacts
+/*.AppImage
+/AppDir/
+/tools/*.AppImage
+
+# Logs and dumps
+/*.log
+/core
+/core.*
+
+# Editor files
+/.idea/
+/.vscode/
+*~
+*.swp
+*.swo

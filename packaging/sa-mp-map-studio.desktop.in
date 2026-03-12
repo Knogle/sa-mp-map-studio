@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=@APP_DISPLAY_NAME@
+Comment=SA:MP map editor for coordinates, spawns, vehicles and zones
+Exec=@APP_EXECUTABLE_NAME@
+Icon=@APP_DESKTOP_ID@
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+Keywords=GTA;SA:MP;San Andreas;Map;Editor;Coordinates;
