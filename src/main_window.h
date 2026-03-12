@@ -2,7 +2,7 @@
 
 #include "editor_types.h"
 #include "mapandreas_heightmap.h"
-#include "sa_map_loader.h"
+#include "runtime_asset_manager.h"
 #include "samp_zone_database.h"
 
 #include <QLabel>
@@ -21,15 +21,15 @@ class QPushButton;
 class QSpinBox;
 class QStackedWidget;
 class QTableWidget;
+class QTextEdit;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    MainWindow(SaMapAsset radarMapAsset,
-               std::optional<SaMapAsset> terrainMapAsset,
-               MapAndreasHeightMap heightMap,
-               QString hmapPath,
+    MainWindow(RuntimeAssetBundle runtimeBundle,
+               QString txdPath,
+               QString terrainMapPath,
                QWidget* parent = nullptr);
 
 private slots:
@@ -47,6 +47,9 @@ private slots:
     void copyExport();
     void saveExport();
     void updateExportPreview();
+    void browseImgPath();
+    void reloadRuntimeSources();
+    void downloadManagedHeightmap();
 
 private:
     [[nodiscard]] EditorToolMode currentToolMode() const;
@@ -62,6 +65,8 @@ private:
     [[nodiscard]] QString generateJsonExport() const;
     [[nodiscard]] const SaMapAsset& currentMapAsset() const;
 
+    void applyRuntimeBundle(RuntimeAssetBundle bundle);
+    void rebuildMapModeCombo();
     void updateCoordinateLabels(double worldX, double worldY);
     void updateSourceLabel();
     void addVehicleAt(double worldX, double worldY);
@@ -81,6 +86,14 @@ private:
     QPushButton* zoomInButton_ = nullptr;
     QPushButton* zoomOutButton_ = nullptr;
     QPushButton* resetZoomButton_ = nullptr;
+    QLineEdit* imgPathEdit_ = nullptr;
+    QPushButton* browseImgButton_ = nullptr;
+    QPushButton* reloadSourcesButton_ = nullptr;
+    QPushButton* downloadHeightmapButton_ = nullptr;
+    QLabel* cachePathLabel_ = nullptr;
+    QLabel* heightmapStatusLabel_ = nullptr;
+    QLabel* colAndreasStatusLabel_ = nullptr;
+    QPlainTextEdit* runtimeNotesEdit_ = nullptr;
 
     QComboBox* toolModeCombo_ = nullptr;
     QLabel* toolHintLabel_ = nullptr;
@@ -121,7 +134,13 @@ private:
     SampZoneDatabase zoneDatabase_;
     SaMapAsset radarMapAsset_;
     std::optional<SaMapAsset> terrainMapAsset_;
+    QString imgPath_;
     QString hmapPath_;
+    QString txdPath_;
+    QString terrainMapPath_;
+    QString cacheRootPath_;
+    QString colAndreasPath_;
+    QString runtimeNotes_;
     QString currentCoordinateText_;
     QVector<EditorItem> items_;
     int nextItemId_ = 1;

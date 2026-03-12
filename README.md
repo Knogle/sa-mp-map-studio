@@ -10,11 +10,12 @@ terrain map views, and export Pawn or JSON data.
 Current implementation details:
 
 - GUI: Qt6 Widgets
+- Runtime asset cache: local app data directory managed by the tool
 - App icon: extracted from local `samp.exe`
 - Preferred map source: GTA SA `models/gta3.img` radar tiles (`radar00..radar143`)
 - Optional alternate map source: embedded aerial terrain map (`6000x6000`)
 - Fallback map source: SA-MP `samaps.txd`
-- Height source: MapAndreas `SAfull.hmap`
+- Height source: MapAndreas `SAfull.hmap`, downloaded into the runtime cache if missing
 - SA:MP zone source: embedded zone dataset extracted from YSI `y_zonenames`
 - Coordinate basis: `X` and `Y` span `[-3000, 3000)` and `Z` is read with the
   same truncation/indexing logic as `MapAndreas_FindZ_For2DCoord`.
@@ -49,6 +50,7 @@ Editor features:
 - Item list with map overlays and selection highlighting
 - Export tab with Pawn and JSON output
 - Copy selected Pawn snippet, copy full export, or save export to file
+- `Sources` tab to configure `gta3.img`, reload assets and manage runtime dependencies
 
 ## Project Layout
 
@@ -62,12 +64,27 @@ Editor features:
 - CMake 3.21+
 - C++20 compiler
 - Qt 6 Widgets development files
+- Qt 6 Network development files
 
 Fedora packages:
 
 ```bash
 sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qttools-devel desktop-file-utils appstream
 ```
+
+## Standalone Runtime Data
+
+The tool is now designed to work as a mostly self-contained editor:
+
+- configure `gta3.img` once in the `Sources` tab or pass `--img`
+- the app extracts the radar map directly from `gta3.img`
+- if no local `SAfull.hmap` is available, it downloads the MapAndreas heightmap
+  into the app runtime cache
+- if no GTA map files are available yet, it still opens with the bundled terrain
+  map as a fallback
+
+The current ColAndreas path is also reserved in the runtime cache, but the
+actual ColAndreas Z backend is not integrated yet.
 
 Optional paths:
 

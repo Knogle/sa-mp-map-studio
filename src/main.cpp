@@ -1,5 +1,6 @@
 #include "main_window.h"
 #include "mapandreas_heightmap.h"
+#include "runtime_asset_manager.h"
 #include "sa_map_loader.h"
 
 #include <QApplication>
@@ -15,6 +16,8 @@
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(QStringLiteral(":/data/samp.ico")));
+    QCoreApplication::setOrganizationName(QStringLiteral("Knogle"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("github.com/Knogle"));
     QCoreApplication::setApplicationName(QStringLiteral("SA:MP Map Studio"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
@@ -67,22 +70,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    SaMapAsset mapAsset;
-    if (!SaMapLoader::loadBestAvailableMap(imgPath, txdPath, &mapAsset, &errorMessage)) {
-        QMessageBox::critical(nullptr, QStringLiteral("SA:MP Map Studio"), errorMessage.isEmpty() ? QStringLiteral("Could not load SA map") : errorMessage);
+    RuntimeAssetBundle runtimeBundle;
+    if (!RuntimeAssetManager::loadRuntimeBundle(imgPath, txdPath, terrainMapPath, hmapPath, &runtimeBundle, &errorMessage, true)) {
+        QMessageBox::critical(nullptr, QStringLiteral("SA:MP Map Studio"), errorMessage.isEmpty() ? QStringLiteral("Could not initialize runtime assets") : errorMessage);
         return 1;
     }
 
-    std::optional<SaMapAsset> terrainMapAsset;
-    if (!terrainMapPath.isEmpty()) {
-        SaMapAsset loadedTerrainMap;
-        QString terrainError;
-        if (SaMapLoader::loadTerrainMapImage(terrainMapPath, txdPath, &loadedTerrainMap, &terrainError)) {
-            terrainMapAsset = std::move(loadedTerrainMap);
-        }
-    }
-
-    if (parser.isSet(exportOption) && !mapAsset.image.save(parser.value(exportOption))) {
+    if (parser.isSet(exportOption) && !runtimeBundle.radarMapAsset.image.save(parser.value(exportOption))) {
         QMessageBox::critical(nullptr, QStringLiteral("SA:MP Map Studio"), QStringLiteral("Could not export map image to %1").arg(parser.value(exportOption)));
         return 1;
     }
@@ -91,16 +85,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    MapAndreasHeightMap heightMap;
-    if (!hmapPath.isEmpty()) {
-        QString heightError;
-        if (!heightMap.load(hmapPath, &heightError)) {
-            QMessageBox::critical(nullptr, QStringLiteral("SA:MP Map Studio"), heightError);
-            return 1;
-        }
-    }
-
-    MainWindow window(std::move(mapAsset), std::move(terrainMapAsset), std::move(heightMap), hmapPath);
+    MainWindow window(std::move(runtimeBundle), txdPath, terrainMapPath);
     window.show();
     return app.exec();
 }

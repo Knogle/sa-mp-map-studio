@@ -344,6 +344,50 @@ bool alignImageToReferenceMap(QImage* image, const QString& txdReferencePath, QS
     return true;
 }
 
+bool alignImageToReferenceMap(QImage* image, const QImage& referenceMap, QString* alignmentText) {
+    if (!image || image->isNull() || referenceMap.isNull()) {
+        return false;
+    }
+
+    if (alignmentText) {
+        *alignmentText = QStringLiteral("unaligned");
+    }
+
+    const QImage thumbnail = image->scaled(referenceMap.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+    const std::array<Orientation, 8> orientations = {
+        Orientation::Identity,
+        Orientation::Rotate90,
+        Orientation::Rotate180,
+        Orientation::Rotate270,
+        Orientation::MirrorHorizontal,
+        Orientation::MirrorVertical,
+        Orientation::Transpose,
+        Orientation::Transverse,
+    };
+
+    Orientation bestOrientation = Orientation::Identity;
+    double bestScore = std::numeric_limits<double>::infinity();
+
+    for (Orientation orientation : orientations) {
+        const QImage candidate = applyOrientation(thumbnail, orientation);
+        const double score = imageDifferenceScore(candidate, referenceMap);
+        if (score < bestScore) {
+            bestScore = score;
+            bestOrientation = orientation;
+        }
+    }
+
+    *image = applyOrientation(*image, bestOrientation);
+    if (alignmentText) {
+        *alignmentText =
+            QStringLiteral("%1 aligned against reference map (score=%2)")
+                .arg(orientationName(bestOrientation))
+                .arg(bestScore, 0, 'f', 2);
+    }
+    return true;
+}
+
 } // namespace
 
 QString SaMapLoader::findDefaultImgPath() {
@@ -426,6 +470,41 @@ bool SaMapLoader::loadMapFromTxd(const QString& path, SaMapAsset* outAsset, QStr
 
     outAsset->image = fullMap;
     outAsset->description = QStringLiteral("Loaded from %1").arg(path);
+    return true;
+}
+
+bool SaMapLoader::loadTerrainMapImage(const QString& path,
+                                      const QImage& referenceMap,
+                                      SaMapAsset* outAsset,
+                                      QString* errorMessage) {
+    QImage image;
+    if (!path.isEmpty()) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly)) {
+            const QByteArray bytes = file.readAll();
+            image.loadFromData(bytes);
+        } else {
+            image.load(path);
+        }
+    }
+
+    if (image.isNull()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("Could not load terrain map image from %1").arg(path);
+        }
+        return false;
+    }
+
+    QString alignmentText = QStringLiteral("unaligned");
+    alignImageToReferenceMap(&image, referenceMap, &alignmentText);
+
+    outAsset->image = std::move(image);
+    outAsset->description =
+        QStringLiteral("%1 via terrain map (%2x%3, %4)")
+            .arg(path)
+            .arg(outAsset->image.width())
+            .arg(outAsset->image.height())
+            .arg(alignmentText);
     return true;
 }
 

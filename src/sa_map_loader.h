@@ -22,6 +22,10 @@ public:
                                      SaMapAsset* outAsset,
                                      QString* errorMessage = nullptr);
     static bool loadTerrainMapImage(const QString& path,
+                                    const QImage& referenceMap,
+                                    SaMapAsset* outAsset,
+                                    QString* errorMessage = nullptr);
+    static bool loadTerrainMapImage(const QString& path,
                                     const QString& txdReferencePath,
                                     SaMapAsset* outAsset,
                                     QString* errorMessage = nullptr);

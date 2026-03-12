@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "map_widget.h"
+#include "runtime_asset_manager.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -17,6 +18,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -92,17 +94,22 @@ QString sanitizeIdentifier(QString text) {
 
 } // namespace
 
-MainWindow::MainWindow(SaMapAsset radarMapAsset,
-                       std::optional<SaMapAsset> terrainMapAsset,
-                       MapAndreasHeightMap heightMap,
-                       QString hmapPath,
+MainWindow::MainWindow(RuntimeAssetBundle runtimeBundle,
+                       QString txdPath,
+                       QString terrainMapPath,
                        QWidget* parent)
     : QMainWindow(parent),
-      heightMap_(std::move(heightMap)),
+      heightMap_(std::move(runtimeBundle.heightMap)),
       zoneDatabase_(),
-      radarMapAsset_(std::move(radarMapAsset)),
-      terrainMapAsset_(std::move(terrainMapAsset)),
-      hmapPath_(std::move(hmapPath)) {
+      radarMapAsset_(std::move(runtimeBundle.radarMapAsset)),
+      terrainMapAsset_(std::move(runtimeBundle.terrainMapAsset)),
+      imgPath_(std::move(runtimeBundle.imgPath)),
+      hmapPath_(std::move(runtimeBundle.hmapPath)),
+      txdPath_(std::move(txdPath)),
+      terrainMapPath_(std::move(terrainMapPath)),
+      cacheRootPath_(std::move(runtimeBundle.cacheRootPath)),
+      colAndreasPath_(std::move(runtimeBundle.colAndreasPath)),
+      runtimeNotes_(std::move(runtimeBundle.runtimeNotes)) {
     setWindowTitle(QStringLiteral("SA:MP Map Studio"));
     resize(1920, 1080);
 
@@ -131,10 +138,7 @@ MainWindow::MainWindow(SaMapAsset radarMapAsset,
     infoLayout->addWidget(xyzLabel_, 1);
 
     mapModeCombo_ = new QComboBox(mapPane);
-    mapModeCombo_->addItem(QStringLiteral("Radar Map"));
-    if (terrainMapAsset_.has_value()) {
-        mapModeCombo_->addItem(QStringLiteral("Terrain Map"));
-    }
+    rebuildMapModeCombo();
     infoLayout->addWidget(mapModeCombo_);
 
     zoomOutButton_ = new QPushButton(QStringLiteral("-"), mapPane);
@@ -304,6 +308,49 @@ MainWindow::MainWindow(SaMapAsset radarMapAsset,
     placementLayout->addWidget(itemsGroup, 1);
     rightTabs->addTab(placementTab, QStringLiteral("Placement"));
 
+    auto* sourcesTab = new QWidget(rightTabs);
+    auto* sourcesLayout = new QVBoxLayout(sourcesTab);
+    sourcesLayout->setContentsMargins(12, 12, 12, 12);
+    sourcesLayout->setSpacing(12);
+
+    auto* gtaGroup = new QGroupBox(QStringLiteral("GTA SA Sources"), sourcesTab);
+    auto* gtaLayout = new QFormLayout(gtaGroup);
+    imgPathEdit_ = new QLineEdit(imgPath_, gtaGroup);
+    browseImgButton_ = new QPushButton(QStringLiteral("Browse..."), gtaGroup);
+    auto* imgRow = new QHBoxLayout();
+    imgRow->addWidget(imgPathEdit_, 1);
+    imgRow->addWidget(browseImgButton_);
+    gtaLayout->addRow(QStringLiteral("gta3.img"), imgRow);
+    auto* gtaHelp = new QLabel(QStringLiteral("Point this to GTA San Andreas `models/gta3.img`. The app extracts the radar tiles from there and keeps the configured path in local settings."), gtaGroup);
+    gtaHelp->setWordWrap(true);
+    gtaLayout->addRow(gtaHelp);
+    sourcesLayout->addWidget(gtaGroup);
+
+    auto* runtimeGroup = new QGroupBox(QStringLiteral("Managed Runtime Data"), sourcesTab);
+    auto* runtimeLayout = new QVBoxLayout(runtimeGroup);
+    cachePathLabel_ = new QLabel(runtimeGroup);
+    cachePathLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    runtimeLayout->addWidget(cachePathLabel_);
+    heightmapStatusLabel_ = new QLabel(runtimeGroup);
+    heightmapStatusLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    runtimeLayout->addWidget(heightmapStatusLabel_);
+    colAndreasStatusLabel_ = new QLabel(runtimeGroup);
+    colAndreasStatusLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    runtimeLayout->addWidget(colAndreasStatusLabel_);
+    auto* runtimeButtons = new QHBoxLayout();
+    reloadSourcesButton_ = new QPushButton(QStringLiteral("Reload Sources"), runtimeGroup);
+    downloadHeightmapButton_ = new QPushButton(QStringLiteral("Download MapAndreas"), runtimeGroup);
+    runtimeButtons->addWidget(reloadSourcesButton_);
+    runtimeButtons->addWidget(downloadHeightmapButton_);
+    runtimeButtons->addStretch(1);
+    runtimeLayout->addLayout(runtimeButtons);
+    runtimeNotesEdit_ = new QPlainTextEdit(runtimeGroup);
+    runtimeNotesEdit_->setReadOnly(true);
+    runtimeNotesEdit_->setMaximumBlockCount(200);
+    runtimeLayout->addWidget(runtimeNotesEdit_, 1);
+    sourcesLayout->addWidget(runtimeGroup, 1);
+    rightTabs->addTab(sourcesTab, QStringLiteral("Sources"));
+
     auto* exportTab = new QWidget(rightTabs);
     auto* exportLayout = new QVBoxLayout(exportTab);
     exportLayout->setContentsMargins(12, 12, 12, 12);
@@ -351,6 +398,9 @@ MainWindow::MainWindow(SaMapAsset radarMapAsset,
     connect(exportFormatCombo_, &QComboBox::currentIndexChanged, this, &MainWindow::updateExportPreview);
     connect(copyExportButton_, &QPushButton::clicked, this, &MainWindow::copyExport);
     connect(saveExportButton_, &QPushButton::clicked, this, &MainWindow::saveExport);
+    connect(browseImgButton_, &QPushButton::clicked, this, &MainWindow::browseImgPath);
+    connect(reloadSourcesButton_, &QPushButton::clicked, this, &MainWindow::reloadRuntimeSources);
+    connect(downloadHeightmapButton_, &QPushButton::clicked, this, &MainWindow::downloadManagedHeightmap);
 
     updateZoomLabel(mapWidget_->zoomFactor());
     updateSourceLabel();
@@ -540,6 +590,44 @@ const SaMapAsset& MainWindow::currentMapAsset() const {
     return radarMapAsset_;
 }
 
+void MainWindow::applyRuntimeBundle(RuntimeAssetBundle bundle) {
+    radarMapAsset_ = std::move(bundle.radarMapAsset);
+    terrainMapAsset_ = std::move(bundle.terrainMapAsset);
+    heightMap_ = std::move(bundle.heightMap);
+    imgPath_ = std::move(bundle.imgPath);
+    hmapPath_ = std::move(bundle.hmapPath);
+    cacheRootPath_ = std::move(bundle.cacheRootPath);
+    colAndreasPath_ = std::move(bundle.colAndreasPath);
+    runtimeNotes_ = std::move(bundle.runtimeNotes);
+
+    if (imgPathEdit_) {
+        imgPathEdit_->setText(imgPath_);
+    }
+
+    const bool preferTerrain = mapModeCombo_ && mapModeCombo_->currentIndex() == 1 && terrainMapAsset_.has_value();
+    rebuildMapModeCombo();
+    if (preferTerrain && terrainMapAsset_.has_value()) {
+        mapModeCombo_->setCurrentIndex(1);
+    }
+
+    mapWidget_->setMapImage(currentMapAsset().image);
+    rebuildMapOverlays();
+    updateSourceLabel();
+}
+
+void MainWindow::rebuildMapModeCombo() {
+    if (!mapModeCombo_) {
+        return;
+    }
+
+    const QSignalBlocker blocker(mapModeCombo_);
+    mapModeCombo_->clear();
+    mapModeCombo_->addItem(QStringLiteral("Radar Map"));
+    if (terrainMapAsset_.has_value()) {
+        mapModeCombo_->addItem(QStringLiteral("Terrain Map"));
+    }
+}
+
 void MainWindow::handleMapClicked(double worldX, double worldY) {
     updateCoordinateLabels(worldX, worldY);
 
@@ -699,6 +787,47 @@ void MainWindow::updateExportPreview() {
     }
 }
 
+void MainWindow::browseImgPath() {
+    const QString path =
+        QFileDialog::getOpenFileName(this,
+                                     QStringLiteral("Select gta3.img"),
+                                     imgPathEdit_->text().trimmed(),
+                                     QStringLiteral("GTA IMG Archives (gta3.img);;All Files (*)"));
+    if (!path.isEmpty()) {
+        imgPathEdit_->setText(path);
+    }
+}
+
+void MainWindow::reloadRuntimeSources() {
+    RuntimeAssetManager::setConfiguredImgPath(imgPathEdit_->text().trimmed());
+
+    RuntimeAssetBundle bundle;
+    QString errorMessage;
+    if (!RuntimeAssetManager::loadRuntimeBundle(imgPathEdit_->text().trimmed(),
+                                                txdPath_,
+                                                terrainMapPath_,
+                                                QString(),
+                                                &bundle,
+                                                &errorMessage,
+                                                true)) {
+        QMessageBox::critical(this, QStringLiteral("SA:MP Map Studio"), errorMessage);
+        return;
+    }
+
+    applyRuntimeBundle(std::move(bundle));
+}
+
+void MainWindow::downloadManagedHeightmap() {
+    QString downloadedPath;
+    QString errorMessage;
+    if (!RuntimeAssetManager::downloadMapAndreasHeightmap(&downloadedPath, &errorMessage)) {
+        QMessageBox::critical(this, QStringLiteral("SA:MP Map Studio"), errorMessage);
+        return;
+    }
+
+    reloadRuntimeSources();
+}
+
 void MainWindow::updateCoordinateLabels(double worldX, double worldY) {
     const auto z = lookupZ(worldX, worldY);
     const QString xText = QString::number(worldX, 'f', 3);
@@ -714,10 +843,29 @@ void MainWindow::updateSourceLabel() {
                                   ? QStringLiteral("Zones: SA:MP zone dataset loaded")
                                   : QStringLiteral("Zones: %1").arg(zoneDatabase_.loadError().isEmpty() ? QStringLiteral("not available") : zoneDatabase_.loadError());
     sourceLabel_->setText(
-        QStringLiteral("Map: %1\nHeightmap: %2\n%3")
+        QStringLiteral("Map: %1\nGTA3 IMG: %2\nHeightmap: %3\n%4")
             .arg(currentMapAsset().description.isEmpty() ? QStringLiteral("(not found)") : currentMapAsset().description)
+            .arg(imgPath_.isEmpty() ? QStringLiteral("(not configured)") : imgPath_)
             .arg(hmapPath_.isEmpty() ? QStringLiteral("(not found)") : hmapPath_)
             .arg(zonesText));
+
+    if (cachePathLabel_) {
+        cachePathLabel_->setText(QStringLiteral("Runtime cache: %1").arg(cacheRootPath_.isEmpty() ? QStringLiteral("(not initialized)") : cacheRootPath_));
+    }
+    if (heightmapStatusLabel_) {
+        heightmapStatusLabel_->setText(
+            QStringLiteral("MapAndreas: %1")
+                .arg(hmapPath_.isEmpty() ? QStringLiteral("not available locally") : hmapPath_));
+    }
+    if (colAndreasStatusLabel_) {
+        const QString colState = QFileInfo::exists(colAndreasPath_)
+                                     ? QStringLiteral("%1 (reserved for a future ColAndreas backend)")
+                                     : QStringLiteral("%1 (reserved path, not downloaded yet)").arg(colAndreasPath_);
+        colAndreasStatusLabel_->setText(QStringLiteral("ColAndreas cache: %1").arg(colState));
+    }
+    if (runtimeNotesEdit_) {
+        runtimeNotesEdit_->setPlainText(runtimeNotes_.trimmed().isEmpty() ? QStringLiteral("No runtime notes.") : runtimeNotes_.trimmed());
+    }
 }
 
 void MainWindow::addVehicleAt(double worldX, double worldY) {

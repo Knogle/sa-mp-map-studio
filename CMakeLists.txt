@@ -10,7 +10,7 @@ set(APP_DISPLAY_NAME "SA:MP Map Studio")
 set(APP_EXECUTABLE_NAME "samp-map-studio")
 set(APP_DESKTOP_ID "sa-mp-map-studio")
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets)
 include(GNUInstallDirs)
 
 qt_standard_project_setup()
@@ -27,6 +27,8 @@ qt_add_executable(samp_map_studio
     src/map_widget.h
     src/mapandreas_heightmap.cpp
     src/mapandreas_heightmap.h
+    src/runtime_asset_manager.cpp
+    src/runtime_asset_manager.h
     src/sa_map_loader.cpp
     src/sa_map_loader.h
     src/samp_zone_database.cpp
@@ -37,7 +39,7 @@ qt_add_executable(samp_map_studio
 
 set_target_properties(samp_map_studio PROPERTIES OUTPUT_NAME "${APP_EXECUTABLE_NAME}")
 
-target_link_libraries(samp_map_studio PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+target_link_libraries(samp_map_studio PRIVATE Qt6::Core Qt6::Gui Qt6::Network Qt6::Widgets)
 
 set(PACKAGING_DIR "${CMAKE_CURRENT_BINARY_DIR}/packaging")
 file(MAKE_DIRECTORY "${PACKAGING_DIR}")
